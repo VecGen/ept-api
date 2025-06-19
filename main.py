@@ -12,7 +12,6 @@ import os
 import uvicorn
 from pathlib import Path
 import boto3
-from botocore.config import Config
 
 from routers import admin, engineer, auth, teams, data
 from core.config import get_settings
@@ -115,12 +114,7 @@ async def startup_event():
     
     try:
         # Test S3 connection before initializing managers
-        s3_config = Config(
-            use_ssl=True,
-            signature_version='s3v4',
-            addressing_style='virtual'
-        )
-        s3_client = boto3.client('s3', config=s3_config)
+        s3_client = boto3.client('s3')
         s3_client.head_bucket(Bucket=settings.s3_bucket_name)
         print(f"✅ Successfully connected to S3 bucket: {settings.s3_bucket_name}")
         
@@ -149,12 +143,7 @@ async def health_check():
     # Test S3 connection
     if settings.use_s3 and settings.s3_bucket_name:
         try:
-            s3_config = Config(
-                use_ssl=True,
-                signature_version='s3v4',
-                addressing_style='virtual'
-            )
-            s3_client = boto3.client('s3', config=s3_config)
+            s3_client = boto3.client('s3')
             s3_client.head_bucket(Bucket=settings.s3_bucket_name)
             health_status["s3_connection"] = "healthy"
         except Exception as e:

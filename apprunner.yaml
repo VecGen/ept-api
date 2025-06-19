@@ -21,7 +21,3 @@ run:
       value: "ept-data"
     - name: USE_S3
       value: "true"
-    - name: FRONTEND_URL
-      value: "https://bynixti6xn.us-east-1.awsapprunner.com"
-    - name: DEVELOPMENT_MODE
-      value: "false"
