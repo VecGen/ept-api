@@ -34,7 +34,7 @@ allowed_origins = os.environ.get("CORS_ORIGINS", "").split(",") if os.environ.ge
     "http://localhost:3000",  # Common dev port
     "http://localhost:8080",  # Common dev port
     "https://mnwpivaen5.us-east-1.awsapprunner.com",  # Current AppRunner URL
-    "https://vecgen.github.io",  # GitHub Pages if used
+    "https://bynixti6xn.us-east-1.awsapprunner.com"
 ]
 
 # Add current host for production
