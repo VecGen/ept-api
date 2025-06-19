@@ -2,11 +2,11 @@
 Engineer router for data entry and dashboard
 """
 
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, Query
 import pandas as pd
 from datetime import datetime, timedelta
 
-from models.schemas import CreateEntryRequest, ApiResponse, EngineerStats
+from models.schemas import CreateEntryRequest, ApiResponse, EngineerStats, EntriesResponse
 from core.auth import verify_engineer_token
 from core.database import get_data_manager_instance, get_team_settings_manager_instance
 
@@ -32,61 +32,92 @@ async def create_entry(
     token_data: dict = Depends(verify_engineer_token)
 ):
     """Create a new efficiency entry"""
-    data_manager = get_data_manager_instance()
-    
-    developer_name = token_data.get("sub")
-    team_name = token_data.get("team")
-    
-    # Get week dates
-    selected_monday, selected_sunday = get_week_dates(entry_data.week_date)
-    
-    # Load existing data
-    df = data_manager.load_team_data(team_name)
-    
-    # Create new entry
-    new_entry = {
-        'Week': selected_monday.strftime('%Y-%m-%d'),
-        'Week_End': selected_sunday.strftime('%Y-%m-%d'),
-        'Story_ID': entry_data.story_id,
-        'Developer_Name': developer_name,
-        'Team_Name': team_name,
-        'Technology': 'General',  # Default value
-        'Original_Estimate_Hours': entry_data.original_estimate,
-        'Efficiency_Gained_Hours': entry_data.efficiency_gained,
-        'Category': entry_data.category,
-        'Area_of_Efficiency': ', '.join(entry_data.efficiency_areas),
-        'Copilot_Used': entry_data.copilot_used,
-        'Task_Type': 'General',  # Default value
-        'Completion_Type': 'Inline Suggestion' if entry_data.copilot_used == 'Yes' else 'Manual',
-        'Lines_of_Code_Saved': None,
-        'Subjective_Ease_Rating': None,
-        'Review_Time_Saved_Hours': None,
-        'Bugs_Prevented': None,
-        'PR_Merged_Status': None,
-        'Notes': entry_data.notes or '',
-        'Timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    }
-    
-    # Add calculated fields
-    efficiency_percentage = (entry_data.efficiency_gained / entry_data.original_estimate) * 100 if entry_data.original_estimate > 0 else 0
-    new_entry['Efficiency_Percentage'] = efficiency_percentage
-    
-    # Add new entry to dataframe
-    if df.empty:
-        df = pd.DataFrame([new_entry])
-    else:
-        df = pd.concat([df, pd.DataFrame([new_entry])], ignore_index=True)
-    
-    # Save data
-    if data_manager.save_team_data(team_name, df):
-        return ApiResponse(
-            success=True,
-            message="Entry created successfully"
-        )
-    else:
+    try:
+        data_manager = get_data_manager_instance()
+        
+        developer_name = token_data.get("sub")
+        team_name = token_data.get("team")
+        
+        print(f"🔄 Creating entry for developer: {developer_name}, team: {team_name}")
+        
+        if not developer_name or not team_name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Missing developer name or team in token. Developer: {developer_name}, Team: {team_name}"
+            )
+        
+        # Get week dates
+        selected_monday, selected_sunday = get_week_dates(entry_data.week_date)
+        print(f"📅 Week dates: {selected_monday} to {selected_sunday}")
+        
+        # Load existing data
+        print(f"📂 Loading team data for: {team_name}")
+        df = data_manager.load_team_data(team_name)
+        print(f"📊 Loaded {len(df)} existing entries")
+        
+        # Create new entry
+        new_entry = {
+            'Week': selected_monday.strftime('%Y-%m-%d'),
+            'Week_End': selected_sunday.strftime('%Y-%m-%d'),
+            'Story_ID': entry_data.story_id,
+            'Developer_Name': developer_name,
+            'Team_Name': team_name,
+            'Technology': 'General',  # Default value
+            'Original_Estimate_Hours': entry_data.original_estimate,
+            'Efficiency_Gained_Hours': entry_data.efficiency_gained,
+            'Category': entry_data.category,
+            'Area_of_Efficiency': ', '.join(entry_data.efficiency_areas),
+            'Copilot_Used': entry_data.copilot_used,
+            'Task_Type': 'General',  # Default value
+            'Completion_Type': 'Inline Suggestion' if entry_data.copilot_used == 'Yes' else 'Manual',
+            'Lines_of_Code_Saved': None,
+            'Subjective_Ease_Rating': None,
+            'Review_Time_Saved_Hours': None,
+            'Bugs_Prevented': None,
+            'PR_Merged_Status': None,
+            'Notes': entry_data.notes or '',
+            'Timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+        
+        # Add calculated fields
+        efficiency_percentage = (entry_data.efficiency_gained / entry_data.original_estimate) * 100 if entry_data.original_estimate > 0 else 0
+        new_entry['Efficiency_Percentage'] = efficiency_percentage
+        
+        print(f"📝 Created new entry: {new_entry['Story_ID']}")
+        
+        # Add new entry to dataframe
+        if df.empty:
+            df = pd.DataFrame([new_entry])
+        else:
+            df = pd.concat([df, pd.DataFrame([new_entry])], ignore_index=True)
+        
+        print(f"💾 Saving {len(df)} entries to S3...")
+        
+        # Save data
+        save_result = data_manager.save_team_data(team_name, df)
+        
+        if save_result:
+            print(f"✅ Successfully saved entry for {developer_name}")
+            return ApiResponse(
+                success=True,
+                message="Entry created successfully"
+            )
+        else:
+            print(f"❌ Failed to save entry for {developer_name}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to save entry"
+            )
+            
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except Exception as e:
+        print(f"❌ Unexpected error creating entry: {str(e)}")
+        print(f"   Error type: {type(e).__name__}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to save entry"
+            detail=f"Unexpected error creating entry: {str(e)}"
         )
 
 
@@ -169,4 +200,62 @@ async def get_team_settings(token_data: dict = Depends(verify_engineer_token)):
     return {
         "success": True,
         "data": settings
-    } 
+    }
+
+
+@router.get("/entry", response_model=EntriesResponse)
+async def get_entries(
+    week_date: str = Query(..., description="Date in YYYY-MM-DD format"),
+    token_data: dict = Depends(verify_engineer_token)
+):
+    """Get efficiency entries for a specific week"""
+    try:
+        data_manager = get_data_manager_instance()
+        
+        developer_name = token_data.get("sub")
+        team_name = token_data.get("team")
+        
+        print(f"🔍 Getting entries for developer: {developer_name}, team: {team_name}")
+        
+        if not developer_name or not team_name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Missing developer name or team in token. Developer: {developer_name}, Team: {team_name}"
+            )
+        
+        # Get week dates
+        selected_monday, selected_sunday = get_week_dates(week_date)
+        print(f"📅 Week dates: {selected_monday} to {selected_sunday}")
+        
+        # Load team data
+        print(f"📂 Loading team data for: {team_name}")
+        df = data_manager.load_team_data(team_name)
+        print(f"📊 Loaded {len(df)} total entries")
+        
+        # Filter for the specific week and developer
+        week_start_str = selected_monday.strftime('%Y-%m-%d')
+        developer_entries = df[
+            (df['Week'] == week_start_str) & 
+            (df['Developer_Name'] == developer_name)
+        ]
+        
+        print(f"📋 Found {len(developer_entries)} entries for {developer_name} in week {week_start_str}")
+        
+        # Convert to list of dictionaries
+        entries = developer_entries.to_dict('records')
+        
+        return EntriesResponse(
+            success=True,
+            entries=entries
+        )
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except Exception as e:
+        print(f"❌ Unexpected error getting entries: {str(e)}")
+        print(f"   Error type: {type(e).__name__}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected error getting entries: {str(e)}"
+        ) 

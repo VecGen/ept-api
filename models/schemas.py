@@ -140,6 +140,11 @@ class ApiResponse(BaseModel):
     data: Optional[Any] = None
 
 
+class EntriesResponse(BaseModel):
+    success: bool
+    entries: List[Dict[str, Any]]
+
+
 class ErrorResponse(BaseModel):
     success: bool = False
     message: str

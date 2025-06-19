@@ -65,7 +65,15 @@ async def startup_event():
     """Initialize application on startup"""
     settings = get_settings()
     
-    # Validate S3 configuration
+    # For development, allow running without S3 if DEVELOPMENT_MODE=true
+    dev_mode = os.environ.get("DEVELOPMENT_MODE", "false").lower() == "true"
+    
+    if dev_mode:
+        print("🔧 Running in DEVELOPMENT MODE - S3 checks disabled")
+        print("⚠️  WARNING: This is for development only! Data will not persist.")
+        return
+    
+    # Validate S3 configuration for production
     if not settings.use_s3:
         raise RuntimeError("S3 configuration required. Set USE_S3=true environment variable.")
     
