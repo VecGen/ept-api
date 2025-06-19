@@ -52,7 +52,13 @@ class DataManager:
             self.data_directory.mkdir(exist_ok=True)
             
             try:
-                self.s3_client.download_file(self.s3_bucket, s3_key, str(temp_file))
+                # Use get_object instead of download_file to avoid HeadObject operations
+                response = self.s3_client.get_object(Bucket=self.s3_bucket, Key=s3_key)
+                
+                # Write the content to temp file
+                with open(temp_file, 'wb') as f:
+                    f.write(response['Body'].read())
+                
                 df = pd.read_excel(temp_file)
                 # Clean up temp file
                 temp_file.unlink()
@@ -61,7 +67,7 @@ class DataManager:
             except ClientError as e:
                 error_code = e.response['Error']['Code']
                 print(f"📄 S3 ClientError: {error_code}")
-                if error_code == 'NoSuchKey':
+                if error_code in ['NoSuchKey', '404', 'NotFound']:
                     # File doesn't exist in S3, return empty dataframe
                     print(f"📁 No existing data file found for team '{team_name}', returning empty DataFrame")
                     return pd.DataFrame()
