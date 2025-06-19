@@ -10,6 +10,7 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 import boto3
 from botocore.exceptions import ClientError
+from botocore.config import Config
 from fastapi import HTTPException, status
 import urllib.parse
 
@@ -29,7 +30,13 @@ class DataManager:
             )
             
         try:
-            self.s3_client = boto3.client('s3')
+            # Configure S3 client to use HTTPS only
+            s3_config = Config(
+                use_ssl=True,
+                signature_version='s3v4',
+                addressing_style='virtual'
+            )
+            self.s3_client = boto3.client('s3', config=s3_config)
             # Test S3 connection
             self.s3_client.head_bucket(Bucket=self.s3_bucket)
         except Exception as e:
@@ -146,7 +153,13 @@ class TeamsConfigManager:
             )
             
         try:
-            self.s3_client = boto3.client('s3')
+            # Configure S3 client to use HTTPS only
+            s3_config = Config(
+                use_ssl=True,
+                signature_version='s3v4',
+                addressing_style='virtual'
+            )
+            self.s3_client = boto3.client('s3', config=s3_config)
             # Test S3 connection
             self.s3_client.head_bucket(Bucket=self.s3_bucket)
         except Exception as e:
@@ -202,7 +215,7 @@ class TeamsConfigManager:
 
 
 class TeamSettingsManager:
-    """Manages team settings (categories, efficiency areas, etc.) - S3 ONLY"""
+    """Manages global team settings - S3 ONLY"""
     
     def __init__(self, data_directory: str = "data", use_s3: bool = False, s3_bucket: str = None):
         self.data_directory = Path(data_directory)
@@ -216,7 +229,13 @@ class TeamSettingsManager:
             )
             
         try:
-            self.s3_client = boto3.client('s3')
+            # Configure S3 client to use HTTPS only
+            s3_config = Config(
+                use_ssl=True,
+                signature_version='s3v4',
+                addressing_style='virtual'
+            )
+            self.s3_client = boto3.client('s3', config=s3_config)
             # Test S3 connection
             self.s3_client.head_bucket(Bucket=self.s3_bucket)
         except Exception as e:
