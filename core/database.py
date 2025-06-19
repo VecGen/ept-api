@@ -11,6 +11,7 @@ from datetime import datetime
 import boto3
 from botocore.exceptions import ClientError
 from fastapi import HTTPException, status
+import urllib.parse
 
 
 class DataManager:
@@ -40,10 +41,14 @@ class DataManager:
     def load_team_data(self, team_name: str) -> pd.DataFrame:
         """Load team data from S3 only"""
         try:
-            s3_key = f"teams/{team_name}_efficiency_data.xlsx"
+            # URL encode team name for S3 key to handle spaces and special characters
+            encoded_team_name = urllib.parse.quote(team_name, safe='')
+            s3_key = f"teams/{encoded_team_name}_efficiency_data.xlsx"
+            
+            print(f"🔍 Loading S3 key: {s3_key}")
             
             # Create temp file to download to
-            temp_file = self.data_directory / f"temp_{team_name}_efficiency_data.xlsx"
+            temp_file = self.data_directory / f"temp_{encoded_team_name}_efficiency_data.xlsx"
             self.data_directory.mkdir(exist_ok=True)
             
             try:
@@ -51,12 +56,17 @@ class DataManager:
                 df = pd.read_excel(temp_file)
                 # Clean up temp file
                 temp_file.unlink()
+                print(f"✅ Successfully loaded {len(df)} rows from S3")
                 return df
             except ClientError as e:
-                if e.response['Error']['Code'] == 'NoSuchKey':
+                error_code = e.response['Error']['Code']
+                print(f"📄 S3 ClientError: {error_code}")
+                if error_code == 'NoSuchKey':
                     # File doesn't exist in S3, return empty dataframe
+                    print(f"📁 No existing data file found for team '{team_name}', returning empty DataFrame")
                     return pd.DataFrame()
                 else:
+                    print(f"❌ S3 error: {str(e)}")
                     raise HTTPException(
                         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                         detail=f"Failed to load team data from S3: {str(e)}"
@@ -67,6 +77,8 @@ class DataManager:
                     temp_file.unlink()
                     
         except Exception as e:
+            print(f"❌ Unexpected error in load_team_data: {str(e)}")
+            print(f"   Exception type: {type(e).__name__}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Error loading team data: {str(e)}"
@@ -75,31 +87,38 @@ class DataManager:
     def save_team_data(self, team_name: str, data: pd.DataFrame) -> bool:
         """Save team data to S3 only"""
         try:
+            # URL encode team name for S3 key to handle spaces and special characters
+            encoded_team_name = urllib.parse.quote(team_name, safe='')
+            
             # Create temp file
-            temp_file = self.data_directory / f"temp_{team_name}_efficiency_data.xlsx"
+            temp_file = self.data_directory / f"temp_{encoded_team_name}_efficiency_data.xlsx"
             self.data_directory.mkdir(exist_ok=True)
             
             try:
                 data.to_excel(temp_file, index=False)
                 
                 # Upload to S3
-                s3_key = f"teams/{team_name}_efficiency_data.xlsx"
+                s3_key = f"teams/{encoded_team_name}_efficiency_data.xlsx"
+                print(f"🔄 Uploading to S3 key: {s3_key}")
                 self.s3_client.upload_file(str(temp_file), self.s3_bucket, s3_key)
                 
                 # Clean up temp file
                 temp_file.unlink()
+                print(f"✅ Successfully saved to S3")
                 return True
                 
             except Exception as e:
                 # Clean up temp file on error
                 if temp_file.exists():
                     temp_file.unlink()
+                print(f"❌ Error saving to S3: {str(e)}")
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail=f"Failed to save team data to S3: {str(e)}"
                 )
                 
         except Exception as e:
+            print(f"❌ Unexpected error in save_team_data: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Error saving team data: {str(e)}"

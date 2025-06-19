@@ -52,8 +52,13 @@ async def create_entry(
         
         # Load existing data
         print(f"📂 Loading team data for: {team_name}")
-        df = data_manager.load_team_data(team_name)
-        print(f"📊 Loaded {len(df)} existing entries")
+        try:
+            df = data_manager.load_team_data(team_name)
+            print(f"📊 Loaded {len(df)} existing entries")
+        except Exception as load_error:
+            print(f"❌ Error loading team data: {str(load_error)}")
+            print(f"   Load error type: {type(load_error).__name__}")
+            raise load_error
         
         # Create new entry
         new_entry = {
