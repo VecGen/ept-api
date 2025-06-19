@@ -215,4 +215,46 @@ async def get_team_data(
                 "copilot_usage_rate": copilot_usage_rate
             }
         }
-    } 
+    }
+
+
+@router.get("/debug/s3", response_model=ApiResponse)
+async def debug_s3_connection(token_data: dict = Depends(verify_admin_token)):
+    """Debug S3 connection and configuration"""
+    from core.config import get_settings
+    import boto3
+    from botocore.exceptions import ClientError
+    
+    settings = get_settings()
+    
+    debug_info = {
+        "use_s3": settings.use_s3,
+        "s3_bucket_name": settings.s3_bucket_name,
+        "aws_region": settings.aws_region,
+        "s3_connection_test": "not_tested"
+    }
+    
+    if settings.use_s3 and settings.s3_bucket_name:
+        try:
+            s3_client = boto3.client('s3')
+            # Test S3 connection by listing bucket
+            s3_client.head_bucket(Bucket=settings.s3_bucket_name)
+            debug_info["s3_connection_test"] = "success"
+            
+            # Check if config file exists
+            try:
+                s3_client.head_object(Bucket=settings.s3_bucket_name, Key="config/teams_config.json")
+                debug_info["teams_config_in_s3"] = "exists"
+            except ClientError:
+                debug_info["teams_config_in_s3"] = "not_found"
+                
+        except ClientError as e:
+            debug_info["s3_connection_test"] = f"failed: {str(e)}"
+        except Exception as e:
+            debug_info["s3_connection_test"] = f"error: {str(e)}"
+    
+    return ApiResponse(
+        success=True,
+        message="S3 debug information",
+        data=debug_info
+    ) 

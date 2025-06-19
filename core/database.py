@@ -10,117 +10,195 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 import boto3
 from botocore.exceptions import ClientError
+from fastapi import HTTPException, status
 
 
 class DataManager:
-    """Handles data storage and retrieval operations"""
+    """Handles data storage and retrieval operations - S3 ONLY"""
     
     def __init__(self, data_directory: str = "data", use_s3: bool = False, s3_bucket: str = None):
         self.data_directory = Path(data_directory)
-        self.data_directory.mkdir(exist_ok=True)
         self.use_s3 = use_s3
         self.s3_bucket = s3_bucket
-        self.s3_client = boto3.client('s3') if use_s3 else None
-    
-    def get_team_file_path(self, team_name: str) -> Path:
-        """Get the file path for a team's data"""
-        return self.data_directory / f"{team_name}_efficiency_data.xlsx"
+        
+        if not self.use_s3 or not self.s3_bucket:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="S3 configuration required. Set USE_S3=true and S3_BUCKET_NAME"
+            )
+            
+        try:
+            self.s3_client = boto3.client('s3')
+            # Test S3 connection
+            self.s3_client.head_bucket(Bucket=self.s3_bucket)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to connect to S3: {str(e)}"
+            )
     
     def load_team_data(self, team_name: str) -> pd.DataFrame:
-        """Load team data from Excel file"""
-        file_path = self.get_team_file_path(team_name)
-        
-        if self.use_s3 and self.s3_bucket:
+        """Load team data from S3 only"""
+        try:
+            s3_key = f"teams/{team_name}_efficiency_data.xlsx"
+            
+            # Create temp file to download to
+            temp_file = self.data_directory / f"temp_{team_name}_efficiency_data.xlsx"
+            self.data_directory.mkdir(exist_ok=True)
+            
             try:
-                # Download from S3
-                s3_key = f"teams/{team_name}_efficiency_data.xlsx"
-                self.s3_client.download_file(self.s3_bucket, s3_key, str(file_path))
-            except ClientError:
-                # File doesn't exist in S3, return empty dataframe
-                return pd.DataFrame()
-        
-        if file_path.exists():
-            try:
-                return pd.read_excel(file_path)
-            except Exception:
-                return pd.DataFrame()
-        
-        return pd.DataFrame()
+                self.s3_client.download_file(self.s3_bucket, s3_key, str(temp_file))
+                df = pd.read_excel(temp_file)
+                # Clean up temp file
+                temp_file.unlink()
+                return df
+            except ClientError as e:
+                if e.response['Error']['Code'] == 'NoSuchKey':
+                    # File doesn't exist in S3, return empty dataframe
+                    return pd.DataFrame()
+                else:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail=f"Failed to load team data from S3: {str(e)}"
+                    )
+            finally:
+                # Ensure temp file is cleaned up
+                if temp_file.exists():
+                    temp_file.unlink()
+                    
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error loading team data: {str(e)}"
+            )
     
     def save_team_data(self, team_name: str, data: pd.DataFrame) -> bool:
-        """Save team data to Excel file"""
+        """Save team data to S3 only"""
         try:
-            file_path = self.get_team_file_path(team_name)
-            data.to_excel(file_path, index=False)
+            # Create temp file
+            temp_file = self.data_directory / f"temp_{team_name}_efficiency_data.xlsx"
+            self.data_directory.mkdir(exist_ok=True)
             
-            if self.use_s3 and self.s3_bucket:
+            try:
+                data.to_excel(temp_file, index=False)
+                
                 # Upload to S3
                 s3_key = f"teams/{team_name}_efficiency_data.xlsx"
-                self.s3_client.upload_file(str(file_path), self.s3_bucket, s3_key)
-            
-            return True
+                self.s3_client.upload_file(str(temp_file), self.s3_bucket, s3_key)
+                
+                # Clean up temp file
+                temp_file.unlink()
+                return True
+                
+            except Exception as e:
+                # Clean up temp file on error
+                if temp_file.exists():
+                    temp_file.unlink()
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to save team data to S3: {str(e)}"
+                )
+                
         except Exception as e:
-            print(f"Error saving team data: {e}")
-            return False
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error saving team data: {str(e)}"
+            )
 
 
 class TeamsConfigManager:
-    """Manages team configuration data"""
+    """Manages team configuration data - S3 ONLY"""
     
     def __init__(self, data_directory: str = "data", use_s3: bool = False, s3_bucket: str = None):
         self.data_directory = Path(data_directory)
-        self.data_directory.mkdir(exist_ok=True)
-        self.config_file = self.data_directory / "teams_config.json"
         self.use_s3 = use_s3
         self.s3_bucket = s3_bucket
-        self.s3_client = boto3.client('s3') if use_s3 else None
+        
+        if not self.use_s3 or not self.s3_bucket:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="S3 configuration required. Set USE_S3=true and S3_BUCKET_NAME"
+            )
+            
+        try:
+            self.s3_client = boto3.client('s3')
+            # Test S3 connection
+            self.s3_client.head_bucket(Bucket=self.s3_bucket)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to connect to S3: {str(e)}"
+            )
     
     def load_teams_config(self) -> Dict[str, List[Dict[str, str]]]:
-        """Load teams configuration"""
-        if self.use_s3 and self.s3_bucket:
+        """Load teams configuration from S3 only"""
+        try:
+            s3_key = "config/teams_config.json"
+            
             try:
-                # Download from S3
-                s3_key = "config/teams_config.json"
-                self.s3_client.download_file(self.s3_bucket, s3_key, str(self.config_file))
-            except ClientError:
-                pass  # File doesn't exist, will use local or create new
-        
-        if self.config_file.exists():
-            try:
-                with open(self.config_file, 'r') as f:
-                    return json.load(f)
-            except Exception:
-                return {}
-        
-        return {}
+                response = self.s3_client.get_object(Bucket=self.s3_bucket, Key=s3_key)
+                config_data = response['Body'].read().decode('utf-8')
+                return json.loads(config_data)
+            except ClientError as e:
+                if e.response['Error']['Code'] == 'NoSuchKey':
+                    # File doesn't exist, return empty config
+                    return {}
+                else:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail=f"Failed to load teams config from S3: {str(e)}"
+                    )
+                    
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error loading teams config: {str(e)}"
+            )
     
     def save_teams_config(self, config: Dict[str, List[Dict[str, str]]]) -> bool:
-        """Save teams configuration"""
+        """Save teams configuration to S3 only"""
         try:
-            with open(self.config_file, 'w') as f:
-                json.dump(config, f, indent=2)
+            s3_key = "config/teams_config.json"
+            config_json = json.dumps(config, indent=2)
             
-            if self.use_s3 and self.s3_bucket:
-                # Upload to S3
-                s3_key = "config/teams_config.json"
-                self.s3_client.upload_file(str(self.config_file), self.s3_bucket, s3_key)
-            
+            self.s3_client.put_object(
+                Bucket=self.s3_bucket,
+                Key=s3_key,
+                Body=config_json,
+                ContentType='application/json'
+            )
             return True
+            
         except Exception as e:
-            print(f"Error saving teams config: {e}")
-            return False
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to save teams config to S3: {str(e)}"
+            )
 
 
 class TeamSettingsManager:
-    """Manages team settings (categories, efficiency areas, etc.)"""
+    """Manages team settings (categories, efficiency areas, etc.) - S3 ONLY"""
     
     def __init__(self, data_directory: str = "data", use_s3: bool = False, s3_bucket: str = None):
         self.data_directory = Path(data_directory)
-        self.data_directory.mkdir(exist_ok=True)
-        self.settings_file = self.data_directory / "team_settings.json"
         self.use_s3 = use_s3
         self.s3_bucket = s3_bucket
-        self.s3_client = boto3.client('s3') if use_s3 else None
+        
+        if not self.use_s3 or not self.s3_bucket:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="S3 configuration required. Set USE_S3=true and S3_BUCKET_NAME"
+            )
+            
+        try:
+            self.s3_client = boto3.client('s3')
+            # Test S3 connection
+            self.s3_client.head_bucket(Bucket=self.s3_bucket)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to connect to S3: {str(e)}"
+            )
         
         # Default settings
         self.default_settings = {
@@ -159,39 +237,50 @@ class TeamSettingsManager:
         }
     
     def load_team_settings(self) -> Dict[str, Any]:
-        """Load team settings"""
-        if self.use_s3 and self.s3_bucket:
+        """Load team settings from S3, create default if not exists"""
+        try:
+            s3_key = "config/team_settings.json"
+            
             try:
-                # Download from S3
-                s3_key = "config/team_settings.json"
-                self.s3_client.download_file(self.s3_bucket, s3_key, str(self.settings_file))
-            except ClientError:
-                pass  # File doesn't exist, will use local or defaults
-        
-        if self.settings_file.exists():
-            try:
-                with open(self.settings_file, 'r') as f:
-                    return json.load(f)
-            except Exception:
-                return self.default_settings
-        
-        return self.default_settings
+                response = self.s3_client.get_object(Bucket=self.s3_bucket, Key=s3_key)
+                settings_data = response['Body'].read().decode('utf-8')
+                return json.loads(settings_data)
+            except ClientError as e:
+                if e.response['Error']['Code'] == 'NoSuchKey':
+                    # File doesn't exist, create default settings in S3
+                    self.save_team_settings(self.default_settings)
+                    return self.default_settings
+                else:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail=f"Failed to load team settings from S3: {str(e)}"
+                    )
+                    
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error loading team settings: {str(e)}"
+            )
     
     def save_team_settings(self, settings: Dict[str, Any]) -> bool:
-        """Save team settings"""
+        """Save team settings to S3 only"""
         try:
-            with open(self.settings_file, 'w') as f:
-                json.dump(settings, f, indent=2)
+            s3_key = "config/team_settings.json"
+            settings_json = json.dumps(settings, indent=2)
             
-            if self.use_s3 and self.s3_bucket:
-                # Upload to S3
-                s3_key = "config/team_settings.json"
-                self.s3_client.upload_file(str(self.settings_file), self.s3_bucket, s3_key)
-            
+            self.s3_client.put_object(
+                Bucket=self.s3_bucket,
+                Key=s3_key,
+                Body=settings_json,
+                ContentType='application/json'
+            )
             return True
+            
         except Exception as e:
-            print(f"Error saving team settings: {e}")
-            return False
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to save team settings to S3: {str(e)}"
+            )
 
 
 # Global instances
