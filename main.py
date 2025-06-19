@@ -27,12 +27,45 @@ app = FastAPI(
 )
 
 # Configure CORS for Vue.js frontend
+# Get allowed origins from environment or use defaults
+allowed_origins = os.environ.get("CORS_ORIGINS", "").split(",") if os.environ.get("CORS_ORIGINS") else [
+    "http://localhost:5173",  # Vite dev server default
+    "http://localhost:5174",  # Vite dev server alternative
+    "http://localhost:3000",  # Common dev port
+    "http://localhost:8080",  # Common dev port
+    "https://mnwpivaen5.us-east-1.awsapprunner.com",  # Current AppRunner URL
+    "https://vecgen.github.io",  # GitHub Pages if used
+]
+
+# Add current host for production
+if not os.environ.get("DEVELOPMENT_MODE", "false").lower() == "true":
+    # In production, also allow the current host
+    host = os.environ.get("HOST", "0.0.0.0")
+    port = int(os.environ.get("PORT", 8080))
+    if host != "0.0.0.0":
+        allowed_origins.append(f"https://{host}")
+        allowed_origins.append(f"http://{host}")
+        if port != 80 and port != 443:
+            allowed_origins.append(f"https://{host}:{port}")
+            allowed_origins.append(f"http://{host}:{port}")
+
+print(f"🌐 CORS allowed origins: {allowed_origins}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],
+    allow_headers=[
+        "Accept",
+        "Accept-Language",
+        "Content-Language",
+        "Content-Type",
+        "Authorization",
+        "X-Requested-With",
+        "X-CSRFToken"
+    ],
+    expose_headers=["*"]
 )
 
 # Include API routers
