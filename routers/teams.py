@@ -4,6 +4,7 @@ Teams router for managing teams and developers
 
 from fastapi import APIRouter, HTTPException, status, Depends
 from typing import List, Dict
+import os
 
 from models.schemas import (
     Team, CreateTeamRequest, AddDeveloperRequest, Developer, ApiResponse
@@ -16,9 +17,9 @@ router = APIRouter()
 
 def generate_engineer_link(developer_name: str, team_name: str) -> str:
     """Generate an access link for an engineer"""
-    # Simple link generation - can be enhanced with proper URL encoding
-    base_url = "http://localhost:3000"  # Frontend URL
-    return f"{base_url}/engineer?team={team_name}&dev={developer_name}"
+    # Get frontend URL from environment variable or use default
+    frontend_url = os.getenv("FRONTEND_URL", "https://bynixti6xn.us-east-1.awsapprunner.com")
+    return f"{frontend_url}/engineer?team={team_name}&dev={developer_name}"
 
 
 @router.get("/", response_model=List[Team])

@@ -33,8 +33,12 @@ allowed_origins = os.environ.get("CORS_ORIGINS", "").split(",") if os.environ.ge
     "http://localhost:5174",  # Vite dev server alternative
     "http://localhost:3000",  # Common dev port
     "http://localhost:8080",  # Common dev port
-    "https://bynixti6xn.us-east-1.awsapprunner.com"
 ]
+
+# Add frontend URL from environment variable
+frontend_url = os.environ.get("FRONTEND_URL")
+if frontend_url:
+    allowed_origins.append(frontend_url)
 
 # Add current host for production
 if not os.environ.get("DEVELOPMENT_MODE", "false").lower() == "true":
