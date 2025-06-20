@@ -26,7 +26,19 @@ def generate_engineer_link(developer_name: str, team_name: str) -> str:
 async def get_teams(token_data: dict = Depends(verify_engineer_token)):
     """Get all teams"""
     teams_config_manager = get_teams_config_manager_instance()
-    teams_config = teams_config_manager.load_teams_config()
+    
+    try:
+        teams_config = teams_config_manager.load_teams_config()
+    except Exception as e:
+        print(f"⚠️ Error loading teams config: {str(e)}")
+        # If loading fails, create a default empty config
+        teams_config = {}
+        try:
+            teams_config_manager.save_teams_config(teams_config)
+            print("✅ Created default empty teams config")
+        except Exception as save_error:
+            print(f"❌ Failed to create default config: {str(save_error)}")
+            # Still return empty list rather than failing
     
     teams = []
     for team_name, team_data in teams_config.items():

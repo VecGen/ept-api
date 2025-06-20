@@ -165,16 +165,24 @@ class TeamsConfigManager:
                 config_data = response['Body'].read().decode('utf-8')
                 return json.loads(config_data)
             except ClientError as e:
-                if e.response['Error']['Code'] == 'NoSuchKey':
-                    # File doesn't exist, return empty config
+                error_code = e.response['Error']['Code']
+                if error_code in ['NoSuchKey', '404', 'NotFound']:
+                    # File doesn't exist, return empty config instead of raising exception
+                    print(f"📁 No teams config file found in S3, returning empty config")
                     return {}
                 else:
+                    # Other S3 errors should still raise exceptions
+                    print(f"❌ S3 error loading teams config: {str(e)}")
                     raise HTTPException(
                         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                         detail=f"Failed to load teams config from S3: {str(e)}"
                     )
                     
+        except HTTPException:
+            # Re-raise HTTPExceptions as-is
+            raise
         except Exception as e:
+            print(f"❌ Unexpected error loading teams config: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Error loading teams config: {str(e)}"
