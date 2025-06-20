@@ -57,37 +57,10 @@ async def list_all_teams():
         
     except Exception as e:
         print(f"❌ Failed to load teams from S3: {str(e)}")
-        # Return hardcoded fallback data if S3 fails
-        print("🔄 Falling back to hardcoded teams data...")
-        
-        hardcoded_teams = [
-            Team(
-                name="Frontend Team",
-                description="Responsible for UI/UX development",
-                developers=[
-                    Developer(name="Alice Johnson", email="alice@company.com"),
-                    Developer(name="Bob Smith", email="bob@company.com")
-                ]
-            ),
-            Team(
-                name="Backend Team", 
-                description="API and database development",
-                developers=[
-                    Developer(name="Charlie Brown", email="charlie@company.com"),
-                    Developer(name="Diana Prince", email="diana@company.com")
-                ]
-            ),
-            Team(
-                name="DevOps Team",
-                description="Infrastructure and deployment",
-                developers=[
-                    Developer(name="Eve Wilson", email="eve@company.com")
-                ]
-            )
-        ]
-        
-        print(f"✅ Returning {len(hardcoded_teams)} hardcoded teams as fallback")
-        return hardcoded_teams
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to load teams from S3: {str(e)}"
+        )
 
 
 
@@ -318,21 +291,4 @@ async def get_team_details(team_name: str):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get team details: {str(e)}"
-        )
-
-
-@router.get("/debug-token")
-async def debug_token_endpoint(request: Request):
-    """Debug endpoint to see what token is being sent"""
-    headers = dict(request.headers)
-    auth_header = headers.get('authorization', 'No Authorization header')
-    
-    print(f"🔍 Debug token endpoint called")
-    print(f"🔍 Authorization header: {auth_header}")
-    print(f"🔍 All headers: {headers}")
-    
-    return {
-        "authorization_header": auth_header,
-        "all_headers": headers,
-        "message": "Check the console logs for details"
-    } 
+        ) 
