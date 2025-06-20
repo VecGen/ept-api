@@ -33,6 +33,7 @@ allowed_origins = os.environ.get("CORS_ORIGINS", "").split(",") if os.environ.ge
     "http://localhost:5174",  # Vite dev server alternative
     "http://localhost:3000",  # Common dev port
     "http://localhost:8080",  # Common dev port
+    "https://bynixti6xn.us-east-1.awsapprunner.com",  # Frontend domain from logs
 ]
 
 # Add frontend URL from environment variable
@@ -52,6 +53,13 @@ if not os.environ.get("DEVELOPMENT_MODE", "false").lower() == "true":
             allowed_origins.append(f"https://{host}:{port}")
             allowed_origins.append(f"http://{host}:{port}")
 
+# Add wildcard for AppRunner domains (temporary fix)
+allowed_origins.extend([
+    "https://*.us-east-1.awsapprunner.com",
+    "https://mnwpivaen5.us-east-1.awsapprunner.com",
+    "*"  # Temporary: Allow all origins for debugging
+])
+
 print(f"🌐 CORS allowed origins: {allowed_origins}")
 
 app.add_middleware(
@@ -70,6 +78,13 @@ app.add_middleware(
     ],
     expose_headers=["*"]
 )
+
+# Add explicit OPTIONS handler for CORS preflight
+@app.options("/{path:path}")
+async def handle_options(path: str):
+    """Handle CORS preflight requests"""
+    print(f"🔧 OPTIONS request received for path: /{path}")
+    return {"message": "OK"}
 
 # Include API routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])

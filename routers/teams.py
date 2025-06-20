@@ -22,6 +22,41 @@ def generate_engineer_link(developer_name: str, team_name: str) -> str:
     return f"{frontend_url}/engineer?team={team_name}&dev={developer_name}"
 
 
+@router.get("/test", response_model=List[Team])
+async def get_teams_test():
+    """Test endpoint without authentication to verify hardcoded data works"""
+    print("🧪 Test endpoint called - returning hardcoded teams data...")
+    
+    hardcoded_teams = [
+        Team(
+            name="Frontend Team",
+            description="Responsible for UI/UX development",
+            developers=[
+                Developer(name="Alice Johnson", email="alice@company.com"),
+                Developer(name="Bob Smith", email="bob@company.com")
+            ]
+        ),
+        Team(
+            name="Backend Team", 
+            description="API and database development",
+            developers=[
+                Developer(name="Charlie Brown", email="charlie@company.com"),
+                Developer(name="Diana Prince", email="diana@company.com")
+            ]
+        ),
+        Team(
+            name="DevOps Team",
+            description="Infrastructure and deployment",
+            developers=[
+                Developer(name="Eve Wilson", email="eve@company.com")
+            ]
+        )
+    ]
+    
+    print(f"✅ Test endpoint returning {len(hardcoded_teams)} hardcoded teams")
+    return hardcoded_teams
+
+
 @router.get("/", response_model=List[Team])
 async def get_teams(token_data: dict = Depends(verify_engineer_token)):
     """Get all teams"""
