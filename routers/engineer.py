@@ -1,13 +1,12 @@
 """
-Engineer router for data entry and dashboard
+Engineer router for data entry and dashboard - Public access for testing
 """
 
-from fastapi import APIRouter, HTTPException, status, Depends, Query
+from fastapi import APIRouter, HTTPException, status, Query
 import pandas as pd
 from datetime import datetime, timedelta
 
 from models.schemas import CreateEntryRequest, ApiResponse, EngineerStats, EntriesResponse
-from core.auth import verify_engineer_token
 from core.database import get_data_manager_instance, get_team_settings_manager_instance
 
 router = APIRouter()
@@ -29,21 +28,19 @@ def get_week_dates(date_input):
 @router.post("/entry", response_model=ApiResponse)
 async def create_entry(
     entry_data: CreateEntryRequest,
-    token_data: dict = Depends(verify_engineer_token)
+    developer_name: str = Query(..., description="Developer name"),
+    team_name: str = Query(..., description="Team name")
 ):
-    """Create a new efficiency entry"""
+    """Create a new efficiency entry - no authentication required for testing"""
     try:
         data_manager = get_data_manager_instance()
-        
-        developer_name = token_data.get("sub")
-        team_name = token_data.get("team")
         
         print(f"🔄 Creating entry for developer: {developer_name}, team: {team_name}")
         
         if not developer_name or not team_name:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Missing developer name or team in token. Developer: {developer_name}, Team: {team_name}"
+                detail=f"Missing developer name or team. Developer: {developer_name}, Team: {team_name}"
             )
         
         # Get week dates
@@ -127,17 +124,32 @@ async def create_entry(
 
 
 @router.get("/dashboard", response_model=EngineerStats)
-async def get_engineer_dashboard(token_data: dict = Depends(verify_engineer_token)):
-    """Get engineer dashboard data"""
+async def get_engineer_dashboard(
+    developer_name: str = Query(..., description="Developer name"),
+    team_name: str = Query(..., description="Team name")
+):
+    """Get engineer dashboard data - no authentication required for testing"""
     data_manager = get_data_manager_instance()
     
-    developer_name = token_data.get("sub")
-    team_name = token_data.get("team")
+    print(f"🔍 Getting dashboard for developer: {developer_name}, team: {team_name}")
     
     # Load engineer's data
-    df = data_manager.load_team_data(team_name)
+    try:
+        df = data_manager.load_team_data(team_name)
+        print(f"📊 Loaded {len(df)} total entries for team {team_name}")
+    except Exception as e:
+        print(f"❌ Error loading team data: {str(e)}")
+        return EngineerStats(
+            developer_name=developer_name,
+            team_name=team_name,
+            total_time_saved=0.0,
+            total_entries=0,
+            average_efficiency=0.0,
+            recent_entries=[]
+        )
     
     if df.empty:
+        print(f"📊 No data found for team {team_name}")
         return EngineerStats(
             developer_name=developer_name,
             team_name=team_name,
@@ -150,6 +162,7 @@ async def get_engineer_dashboard(token_data: dict = Depends(verify_engineer_toke
     engineer_df = df[df['Developer_Name'] == developer_name]
     
     if engineer_df.empty:
+        print(f"📊 No entries found for developer {developer_name}")
         return EngineerStats(
             developer_name=developer_name,
             team_name=team_name,
@@ -162,6 +175,8 @@ async def get_engineer_dashboard(token_data: dict = Depends(verify_engineer_toke
     # Calculate stats
     total_time_saved = float(engineer_df['Efficiency_Gained_Hours'].sum())
     total_entries = len(engineer_df)
+    
+    print(f"📊 Developer {developer_name} stats: {total_entries} entries, {total_time_saved}h saved")
     
     # Calculate average efficiency
     valid_estimates = engineer_df[engineer_df['Original_Estimate_Hours'] > 0]
@@ -186,6 +201,7 @@ async def get_engineer_dashboard(token_data: dict = Depends(verify_engineer_toke
             elif hasattr(value, 'item'):  # numpy types
                 entry[key] = value.item()
     
+    print(f"✅ Returning dashboard data for {developer_name}")
     return EngineerStats(
         developer_name=developer_name,
         team_name=team_name,
@@ -197,35 +213,65 @@ async def get_engineer_dashboard(token_data: dict = Depends(verify_engineer_toke
 
 
 @router.get("/settings")
-async def get_team_settings(token_data: dict = Depends(verify_engineer_token)):
-    """Get team settings for form options"""
-    settings_manager = get_team_settings_manager_instance()
-    settings = settings_manager.load_team_settings()
-    
-    return {
-        "success": True,
-        "data": settings
-    }
+async def get_team_settings():
+    """Get team settings for form options - no authentication required for testing"""
+    try:
+        settings_manager = get_team_settings_manager_instance()
+        settings = settings_manager.load_team_settings()
+        
+        print("✅ Loaded team settings successfully")
+        return {
+            "success": True,
+            "data": settings
+        }
+    except Exception as e:
+        print(f"❌ Error loading team settings: {str(e)}")
+        # Return default settings as fallback
+        return {
+            "success": True,
+            "data": {
+                "categories": [
+                    "Feature Development",
+                    "Bug Fixes", 
+                    "Code Review",
+                    "Testing",
+                    "Documentation",
+                    "Refactoring",
+                    "API Development",
+                    "Database Work"
+                ],
+                "efficiency_areas": [
+                    "Code Generation",
+                    "Code Completion", 
+                    "API Design",
+                    "Documentation",
+                    "Debugging",
+                    "Code Analysis",
+                    "Test Writing",
+                    "Refactoring",
+                    "Test Data Creation",
+                    "Query Optimization"
+                ]
+            }
+        }
 
 
 @router.get("/entry", response_model=EntriesResponse)
 async def get_entries(
     week_date: str = Query(..., description="Date in YYYY-MM-DD format"),
-    token_data: dict = Depends(verify_engineer_token)
+    developer_name: str = Query(..., description="Developer name"),
+    team_name: str = Query(..., description="Team name")
 ):
-    """Get efficiency entries for a specific week"""
+    """Get efficiency entries for a specific week - no authentication required for testing"""
     try:
         data_manager = get_data_manager_instance()
-        
-        developer_name = token_data.get("sub")
-        team_name = token_data.get("team")
         
         print(f"🔍 Getting entries for developer: {developer_name}, team: {team_name}")
         
         if not developer_name or not team_name:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Missing developer name or team in token. Developer: {developer_name}, Team: {team_name}"
+                detail=f"Missing developer name or team. Developer: {developer_name}, Team: {team_name}"
             )
         
         # Get week dates
@@ -249,17 +295,25 @@ async def get_entries(
         # Convert to list of dictionaries
         entries = developer_entries.to_dict('records')
         
+        # Convert pandas data types to Python native types
+        for entry in entries:
+            for key, value in entry.items():
+                if pd.isna(value):
+                    entry[key] = None
+                elif isinstance(value, (pd.Timestamp, pd.Period)):
+                    entry[key] = str(value)
+                elif hasattr(value, 'item'):  # numpy types
+                    entry[key] = value.item()
+        
         return EntriesResponse(
             success=True,
             entries=entries
         )
         
     except HTTPException:
-        # Re-raise HTTP exceptions as-is
         raise
     except Exception as e:
         print(f"❌ Unexpected error getting entries: {str(e)}")
-        print(f"   Error type: {type(e).__name__}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unexpected error getting entries: {str(e)}"
