@@ -25,6 +25,12 @@ def generate_engineer_link(developer_name: str, team_name: str) -> str:
 @router.get("/", response_model=List[Team])
 async def get_teams(token_data: dict = Depends(verify_engineer_token)):
     """Get all teams"""
+    
+    # 🚨 TEMPORARY: Bypassing S3 logic to test authentication
+    # Comment out S3-dependent code and return hardcoded data
+    
+    """
+    # Original S3-dependent code (commented out for testing)
     teams_config_manager = get_teams_config_manager_instance()
     
     try:
@@ -55,6 +61,39 @@ async def get_teams(token_data: dict = Depends(verify_engineer_token)):
         teams.append(Team(name=team_name, developers=developers))
     
     return teams
+    """
+    
+    # 🔥 HARDCODED RESPONSE FOR TESTING (remove this when S3 is working)
+    print("🧪 Returning hardcoded teams data for testing...")
+    
+    hardcoded_teams = [
+        Team(
+            name="Frontend Team",
+            description="Responsible for UI/UX development",
+            developers=[
+                Developer(name="Alice Johnson", email="alice@company.com"),
+                Developer(name="Bob Smith", email="bob@company.com")
+            ]
+        ),
+        Team(
+            name="Backend Team", 
+            description="API and database development",
+            developers=[
+                Developer(name="Charlie Brown", email="charlie@company.com"),
+                Developer(name="Diana Prince", email="diana@company.com")
+            ]
+        ),
+        Team(
+            name="DevOps Team",
+            description="Infrastructure and deployment",
+            developers=[
+                Developer(name="Eve Wilson", email="eve@company.com")
+            ]
+        )
+    ]
+    
+    print(f"✅ Returning {len(hardcoded_teams)} hardcoded teams")
+    return hardcoded_teams
 
 
 @router.post("/", response_model=ApiResponse)
