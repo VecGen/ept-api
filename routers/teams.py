@@ -40,7 +40,10 @@ async def list_all_teams():
                     if isinstance(dev, dict):
                         developers.append(Developer(
                             name=dev.get('name', ''),
-                            email=dev.get('email', '')
+                            email=dev.get('email', ''),
+                            employee_id=dev.get('employee_id', ''),
+                            password=dev.get('password', ''),
+                            link=dev.get('link', '')
                         ))
                     else:
                         # Handle old format where it's just a string
@@ -129,6 +132,8 @@ async def add_developer_to_team(
         developer = {
             'name': developer_data.dev_name,
             'email': developer_data.dev_email,
+            'employee_id': developer_data.dev_employee_id,
+            'password': developer_data.dev_password,
             'link': access_link
         }
         
@@ -276,7 +281,10 @@ async def get_team_details(team_name: str):
                 if isinstance(dev, dict):
                     developers.append(Developer(
                         name=dev.get('name', ''),
-                        email=dev.get('email', '')
+                        email=dev.get('email', ''),
+                        employee_id=dev.get('employee_id', ''),
+                        password=dev.get('password', ''),
+                        link=dev.get('link', '')
                     ))
                 else:
                     developers.append(Developer(name=str(dev), email=''))

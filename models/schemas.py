@@ -27,6 +27,8 @@ class EngineerLoginRequest(BaseModel):
 class Developer(BaseModel):
     name: str
     email: Optional[str] = None
+    employee_id: Optional[str] = None
+    password: Optional[str] = None
     link: Optional[str] = None
 
 
@@ -44,6 +46,8 @@ class CreateTeamRequest(BaseModel):
 class AddDeveloperRequest(BaseModel):
     dev_name: str
     dev_email: Optional[str] = None
+    dev_employee_id: Optional[str] = None
+    dev_password: Optional[str] = None
 
 
 # Data entry schemas
