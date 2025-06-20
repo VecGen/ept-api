@@ -1,15 +1,14 @@
 """
-Simple Teams router with distinct route names for better CORS handling
+Simple Teams router with no authentication for testing
 """
 
-from fastapi import APIRouter, HTTPException, status, Depends, Request
+from fastapi import APIRouter, HTTPException, status, Request
 from typing import List, Dict, Optional
 import os
 
 from models.schemas import (
     Team, CreateTeamRequest, AddDeveloperRequest, Developer, ApiResponse
 )
-from core.auth import verify_admin_token, verify_engineer_token
 from core.database import get_teams_config_manager_instance
 
 router = APIRouter()
@@ -21,54 +20,14 @@ def generate_engineer_link(developer_name: str, team_name: str) -> str:
     return f"{frontend_url}/engineer?team={team_name}&dev={developer_name}"
 
 
-# ===== EXPLICIT OPTIONS HANDLERS FOR CORS =====
-
-@router.options("/list")
-async def options_list_teams():
-    """Handle CORS preflight for list teams endpoint"""
-    print("🔧 OPTIONS preflight for /api/teams/list")
-    return {"message": "OK"}
-
-@router.options("/create")
-async def options_create_team():
-    """Handle CORS preflight for create team endpoint"""
-    print("🔧 OPTIONS preflight for /api/teams/create")
-    return {"message": "OK"}
-
-@router.options("/add-developer")
-async def options_add_developer():
-    """Handle CORS preflight for add developer endpoint"""
-    print("🔧 OPTIONS preflight for /api/teams/add-developer")
-    return {"message": "OK"}
-
-@router.options("/remove-developer")
-async def options_remove_developer():
-    """Handle CORS preflight for remove developer endpoint"""
-    print("🔧 OPTIONS preflight for /api/teams/remove-developer")
-    return {"message": "OK"}
-
-@router.options("/delete-team")
-async def options_delete_team():
-    """Handle CORS preflight for delete team endpoint"""
-    print("🔧 OPTIONS preflight for /api/teams/delete-team")
-    return {"message": "OK"}
-
-@router.options("/get-team")
-async def options_get_team():
-    """Handle CORS preflight for get team endpoint"""
-    print("🔧 OPTIONS preflight for /api/teams/get-team")
-    return {"message": "OK"}
-
-# ===== ACTUAL ENDPOINTS =====
-
 @router.get("/list", response_model=List[Team])
-async def list_all_teams(token_data: dict = Depends(verify_admin_token)):
-    """Get all teams - renamed from GET / to avoid CORS issues"""
+async def list_all_teams():
+    """Get all teams - no authentication required for testing"""
     
-    print(f"🔍 list_all_teams called with token_data: {token_data}")
+    print(f"🔍 list_all_teams called (no auth)")
     
-    # 🚨 TEMPORARY: Return hardcoded data for testing
-    print("🧪 Returning hardcoded teams data for testing...")
+    # Return hardcoded data for testing
+    print("🧪 Returning hardcoded teams data...")
     
     hardcoded_teams = [
         Team(
@@ -129,11 +88,8 @@ async def test_public_endpoint():
 
 
 @router.post("/create", response_model=ApiResponse)
-async def create_new_team(
-    team_data: CreateTeamRequest,
-    token_data: dict = Depends(verify_admin_token)
-):
-    """Create a new team - renamed from POST / for clarity"""
+async def create_new_team(team_data: CreateTeamRequest):
+    """Create a new team - no authentication required for testing"""
     teams_config_manager = get_teams_config_manager_instance()
     teams_config = teams_config_manager.load_teams_config()
     
@@ -160,10 +116,9 @@ async def create_new_team(
 @router.post("/add-developer", response_model=ApiResponse)
 async def add_developer_to_team(
     team_name: str,
-    developer_data: AddDeveloperRequest,
-    token_data: dict = Depends(verify_admin_token)
+    developer_data: AddDeveloperRequest
 ):
-    """Add a developer to a team - renamed for clarity"""
+    """Add a developer to a team - no authentication required for testing"""
     teams_config_manager = get_teams_config_manager_instance()
     teams_config = teams_config_manager.load_teams_config()
     
@@ -200,10 +155,9 @@ async def add_developer_to_team(
 @router.delete("/remove-developer")
 async def remove_developer_from_team(
     team_name: str,
-    developer_name: str,
-    token_data: dict = Depends(verify_admin_token)
+    developer_name: str
 ):
-    """Remove a developer from a team - renamed for clarity"""
+    """Remove a developer from a team - no authentication required for testing"""
     teams_config_manager = get_teams_config_manager_instance()
     teams_config = teams_config_manager.load_teams_config()
     
@@ -239,11 +193,8 @@ async def remove_developer_from_team(
 
 
 @router.delete("/delete-team")
-async def delete_entire_team(
-    team_name: str,
-    token_data: dict = Depends(verify_admin_token)
-):
-    """Delete a team - renamed for clarity"""
+async def delete_entire_team(team_name: str):
+    """Delete a team - no authentication required for testing"""
     teams_config_manager = get_teams_config_manager_instance()
     teams_config = teams_config_manager.load_teams_config()
     
@@ -268,11 +219,8 @@ async def delete_entire_team(
 
 
 @router.get("/get-team", response_model=Team)
-async def get_team_details(
-    team_name: str,
-    token_data: dict = Depends(verify_engineer_token)
-):
-    """Get a specific team - renamed for clarity"""
+async def get_team_details(team_name: str):
+    """Get a specific team - no authentication required for testing"""
     teams_config_manager = get_teams_config_manager_instance()
     teams_config = teams_config_manager.load_teams_config()
     
@@ -293,4 +241,21 @@ async def get_team_details(
             else:
                 developers.append(Developer(name=dev))
     
-    return Team(name=team_name, developers=developers) 
+    return Team(name=team_name, developers=developers)
+
+
+@router.get("/debug-token")
+async def debug_token_endpoint(request: Request):
+    """Debug endpoint to see what token is being sent"""
+    headers = dict(request.headers)
+    auth_header = headers.get('authorization', 'No Authorization header')
+    
+    print(f"🔍 Debug token endpoint called")
+    print(f"🔍 Authorization header: {auth_header}")
+    print(f"🔍 All headers: {headers}")
+    
+    return {
+        "authorization_header": auth_header,
+        "all_headers": headers,
+        "message": "Check the console logs for details"
+    } 
