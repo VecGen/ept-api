@@ -126,6 +126,21 @@ async def startup_event():
         init_data_managers(settings)
         print("✅ Data managers initialized successfully")
         
+        # Ensure teams config exists
+        from core.database import get_teams_config_manager_instance
+        teams_config_manager = get_teams_config_manager_instance()
+        try:
+            teams_config = teams_config_manager.load_teams_config()
+            print(f"✅ Teams config loaded successfully with {len(teams_config)} teams")
+        except Exception as e:
+            print(f"⚠️ Teams config not found, creating default: {str(e)}")
+            # Create default empty teams config
+            default_config = {}
+            if teams_config_manager.save_teams_config(default_config):
+                print("✅ Default teams config created successfully")
+            else:
+                print("❌ Failed to create default teams config")
+        
     except Exception as e:
         error_msg = f"Failed to initialize S3 connection: {str(e)}"
         print(f"❌ {error_msg}")
