@@ -1,9 +1,9 @@
 """
-Teams router for managing teams and developers
+Simple Teams router with distinct route names for better CORS handling
 """
 
-from fastapi import APIRouter, HTTPException, status, Depends
-from typing import List, Dict
+from fastapi import APIRouter, HTTPException, status, Depends, Request
+from typing import List, Dict, Optional
 import os
 
 from models.schemas import (
@@ -17,88 +17,24 @@ router = APIRouter()
 
 def generate_engineer_link(developer_name: str, team_name: str) -> str:
     """Generate an access link for an engineer"""
-    # Get frontend URL from environment variable or use default
     frontend_url = os.getenv("FRONTEND_URL", "https://bynixti6xn.us-east-1.awsapprunner.com")
     return f"{frontend_url}/engineer?team={team_name}&dev={developer_name}"
 
 
-@router.get("/test", response_model=List[Team])
-async def get_teams_test():
-    """Test endpoint without authentication to verify hardcoded data works"""
-    print("🧪 Test endpoint called - returning hardcoded teams data...")
+@router.get("/list", response_model=List[Team])
+async def list_all_teams(request: Request, token_data: dict = Depends(verify_engineer_token)):
+    """Get all teams - renamed from GET / to avoid CORS issues"""
     
-    hardcoded_teams = [
-        Team(
-            name="Frontend Team",
-            description="Responsible for UI/UX development",
-            developers=[
-                Developer(name="Alice Johnson", email="alice@company.com"),
-                Developer(name="Bob Smith", email="bob@company.com")
-            ]
-        ),
-        Team(
-            name="Backend Team", 
-            description="API and database development",
-            developers=[
-                Developer(name="Charlie Brown", email="charlie@company.com"),
-                Developer(name="Diana Prince", email="diana@company.com")
-            ]
-        ),
-        Team(
-            name="DevOps Team",
-            description="Infrastructure and deployment",
-            developers=[
-                Developer(name="Eve Wilson", email="eve@company.com")
-            ]
-        )
-    ]
+    print(f"🔍 list_all_teams called with token_data: {token_data}")
+    print(f"🔍 Request method: {request.method}")
+    print(f"🔍 Request headers: {dict(request.headers)}")
     
-    print(f"✅ Test endpoint returning {len(hardcoded_teams)} hardcoded teams")
-    return hardcoded_teams
-
-
-@router.get("/", response_model=List[Team])
-async def get_teams(token_data: dict = Depends(verify_engineer_token)):
-    """Get all teams"""
+    # Handle OPTIONS requests gracefully
+    if request.method == "OPTIONS":
+        print("🔧 OPTIONS request detected in list_all_teams")
+        return []
     
-    # 🚨 TEMPORARY: Bypassing S3 logic to test authentication
-    # Comment out S3-dependent code and return hardcoded data
-    
-    """
-    # Original S3-dependent code (commented out for testing)
-    teams_config_manager = get_teams_config_manager_instance()
-    
-    try:
-        teams_config = teams_config_manager.load_teams_config()
-    except Exception as e:
-        print(f"⚠️ Error loading teams config: {str(e)}")
-        # If loading fails, create a default empty config
-        teams_config = {}
-        try:
-            teams_config_manager.save_teams_config(teams_config)
-            print("✅ Created default empty teams config")
-        except Exception as save_error:
-            print(f"❌ Failed to create default config: {str(save_error)}")
-            # Still return empty list rather than failing
-    
-    teams = []
-    for team_name, team_data in teams_config.items():
-        developers = []
-        
-        # Handle both old and new data structures
-        if isinstance(team_data, list):
-            for dev in team_data:
-                if isinstance(dev, dict):
-                    developers.append(Developer(**dev))
-                else:
-                    developers.append(Developer(name=dev))
-        
-        teams.append(Team(name=team_name, developers=developers))
-    
-    return teams
-    """
-    
-    # 🔥 HARDCODED RESPONSE FOR TESTING (remove this when S3 is working)
+    # 🚨 TEMPORARY: Return hardcoded data for testing
     print("🧪 Returning hardcoded teams data for testing...")
     
     hardcoded_teams = [
@@ -131,12 +67,40 @@ async def get_teams(token_data: dict = Depends(verify_engineer_token)):
     return hardcoded_teams
 
 
-@router.post("/", response_model=ApiResponse)
-async def create_team(
+@router.get("/test-public", response_model=List[Team])
+async def test_public_endpoint():
+    """Test endpoint without authentication to verify CORS works"""
+    print("🧪 Public test endpoint called - returning hardcoded teams data...")
+    
+    hardcoded_teams = [
+        Team(
+            name="Frontend Team",
+            description="Responsible for UI/UX development",
+            developers=[
+                Developer(name="Alice Johnson", email="alice@company.com"),
+                Developer(name="Bob Smith", email="bob@company.com")
+            ]
+        ),
+        Team(
+            name="Backend Team", 
+            description="API and database development",
+            developers=[
+                Developer(name="Charlie Brown", email="charlie@company.com"),
+                Developer(name="Diana Prince", email="diana@company.com")
+            ]
+        )
+    ]
+    
+    print(f"✅ Public test endpoint returning {len(hardcoded_teams)} hardcoded teams")
+    return hardcoded_teams
+
+
+@router.post("/create", response_model=ApiResponse)
+async def create_new_team(
     team_data: CreateTeamRequest,
     token_data: dict = Depends(verify_admin_token)
 ):
-    """Create a new team"""
+    """Create a new team - renamed from POST / for clarity"""
     teams_config_manager = get_teams_config_manager_instance()
     teams_config = teams_config_manager.load_teams_config()
     
@@ -160,13 +124,13 @@ async def create_team(
         )
 
 
-@router.post("/{team_name}/developers", response_model=ApiResponse)
-async def add_developer(
+@router.post("/add-developer", response_model=ApiResponse)
+async def add_developer_to_team(
     team_name: str,
     developer_data: AddDeveloperRequest,
     token_data: dict = Depends(verify_admin_token)
 ):
-    """Add a developer to a team"""
+    """Add a developer to a team - renamed for clarity"""
     teams_config_manager = get_teams_config_manager_instance()
     teams_config = teams_config_manager.load_teams_config()
     
@@ -200,13 +164,13 @@ async def add_developer(
         )
 
 
-@router.delete("/{team_name}/developers/{developer_name}", response_model=ApiResponse)
-async def remove_developer(
+@router.delete("/remove-developer")
+async def remove_developer_from_team(
     team_name: str,
     developer_name: str,
     token_data: dict = Depends(verify_admin_token)
 ):
-    """Remove a developer from a team"""
+    """Remove a developer from a team - renamed for clarity"""
     teams_config_manager = get_teams_config_manager_instance()
     teams_config = teams_config_manager.load_teams_config()
     
@@ -241,12 +205,12 @@ async def remove_developer(
         )
 
 
-@router.delete("/{team_name}", response_model=ApiResponse)
-async def delete_team(
+@router.delete("/delete-team")
+async def delete_entire_team(
     team_name: str,
     token_data: dict = Depends(verify_admin_token)
 ):
-    """Delete a team"""
+    """Delete a team - renamed for clarity"""
     teams_config_manager = get_teams_config_manager_instance()
     teams_config = teams_config_manager.load_teams_config()
     
@@ -270,12 +234,12 @@ async def delete_team(
         )
 
 
-@router.get("/{team_name}", response_model=Team)
-async def get_team(
+@router.get("/get-team", response_model=Team)
+async def get_team_details(
     team_name: str,
     token_data: dict = Depends(verify_engineer_token)
 ):
-    """Get a specific team"""
+    """Get a specific team - renamed for clarity"""
     teams_config_manager = get_teams_config_manager_instance()
     teams_config = teams_config_manager.load_teams_config()
     

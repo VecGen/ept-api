@@ -6,11 +6,11 @@ from datetime import datetime, timedelta
 from typing import Optional
 import hashlib
 import jwt
-from fastapi import HTTPException, status, Depends
+from fastapi import HTTPException, status, Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from .config import get_settings
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)  # Don't auto-error to handle OPTIONS manually
 
 
 def get_admin_password_hash() -> str:
@@ -40,8 +40,20 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return encoded_jwt
 
 
-def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
-    """Verify JWT token"""
+def verify_token(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+    """Verify JWT token - skip for OPTIONS requests"""
+    # Skip authentication for OPTIONS (CORS preflight) requests
+    if request.method == "OPTIONS":
+        print("🔧 Skipping authentication for OPTIONS request")
+        return {"user_type": "options", "sub": "preflight"}
+    
+    if not credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authorization header required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
     settings = get_settings()
     
     try:
@@ -50,8 +62,10 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)) 
             settings.secret_key, 
             algorithms=[settings.algorithm]
         )
+        print(f"🔑 Token verified successfully for user: {payload.get('sub')}")
         return payload
-    except jwt.PyJWTError:
+    except jwt.PyJWTError as e:
+        print(f"❌ Token verification failed: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
@@ -61,6 +75,10 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)) 
 
 def verify_admin_token(token_data: dict = Depends(verify_token)) -> dict:
     """Verify admin access token"""
+    # Allow OPTIONS requests to pass through
+    if token_data.get("user_type") == "options":
+        return token_data
+        
     if token_data.get("user_type") != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -71,6 +89,10 @@ def verify_admin_token(token_data: dict = Depends(verify_token)) -> dict:
 
 def verify_engineer_token(token_data: dict = Depends(verify_token)) -> dict:
     """Verify engineer access token"""
+    # Allow OPTIONS requests to pass through
+    if token_data.get("user_type") == "options":
+        return token_data
+        
     if token_data.get("user_type") not in ["admin", "engineer"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
