@@ -21,18 +21,51 @@ def generate_engineer_link(developer_name: str, team_name: str) -> str:
     return f"{frontend_url}/engineer?team={team_name}&dev={developer_name}"
 
 
+# ===== EXPLICIT OPTIONS HANDLERS FOR CORS =====
+
+@router.options("/list")
+async def options_list_teams():
+    """Handle CORS preflight for list teams endpoint"""
+    print("🔧 OPTIONS preflight for /api/teams/list")
+    return {"message": "OK"}
+
+@router.options("/create")
+async def options_create_team():
+    """Handle CORS preflight for create team endpoint"""
+    print("🔧 OPTIONS preflight for /api/teams/create")
+    return {"message": "OK"}
+
+@router.options("/add-developer")
+async def options_add_developer():
+    """Handle CORS preflight for add developer endpoint"""
+    print("🔧 OPTIONS preflight for /api/teams/add-developer")
+    return {"message": "OK"}
+
+@router.options("/remove-developer")
+async def options_remove_developer():
+    """Handle CORS preflight for remove developer endpoint"""
+    print("🔧 OPTIONS preflight for /api/teams/remove-developer")
+    return {"message": "OK"}
+
+@router.options("/delete-team")
+async def options_delete_team():
+    """Handle CORS preflight for delete team endpoint"""
+    print("🔧 OPTIONS preflight for /api/teams/delete-team")
+    return {"message": "OK"}
+
+@router.options("/get-team")
+async def options_get_team():
+    """Handle CORS preflight for get team endpoint"""
+    print("🔧 OPTIONS preflight for /api/teams/get-team")
+    return {"message": "OK"}
+
+# ===== ACTUAL ENDPOINTS =====
+
 @router.get("/list", response_model=List[Team])
-async def list_all_teams(request: Request, token_data: dict = Depends(verify_engineer_token)):
+async def list_all_teams(token_data: dict = Depends(verify_admin_token)):
     """Get all teams - renamed from GET / to avoid CORS issues"""
     
     print(f"🔍 list_all_teams called with token_data: {token_data}")
-    print(f"🔍 Request method: {request.method}")
-    print(f"🔍 Request headers: {dict(request.headers)}")
-    
-    # Handle OPTIONS requests gracefully
-    if request.method == "OPTIONS":
-        print("🔧 OPTIONS request detected in list_all_teams")
-        return []
     
     # 🚨 TEMPORARY: Return hardcoded data for testing
     print("🧪 Returning hardcoded teams data for testing...")
