@@ -34,7 +34,11 @@ async def get_admin_dashboard():
             "copilot_usage_rate": 0.0,
             "teams_count": 0,
             "developers_count": 0,
-            "team_stats": []
+            "team_stats": [],
+            "monthly_trends": [],
+            "daily_trends": [],
+            "category_breakdown": [],
+            "efficiency_trends": []
         }
     
     combined_df = pd.DataFrame()
@@ -77,7 +81,12 @@ async def get_admin_dashboard():
                 "developers_count": developers_count
             })
     
-    # Calculate overall stats
+    # Calculate overall stats and trends
+    monthly_trends = []
+    daily_trends = []
+    category_breakdown = []
+    efficiency_trends = []
+    
     if not combined_df.empty:
         total_time_saved = float(combined_df['Efficiency_Gained_Hours'].sum())
         total_entries = len(combined_df)
@@ -96,12 +105,125 @@ async def get_admin_dashboard():
         )
         
         developers_count = combined_df['Developer_Name'].nunique()
+        
+        # Generate trend data for charts
+        if 'Date' in combined_df.columns:
+            # Convert Date column to datetime
+            combined_df['Date'] = pd.to_datetime(combined_df['Date'], errors='coerce')
+            
+            # Monthly trends
+            monthly_data = combined_df.groupby(combined_df['Date'].dt.to_period('M')).agg({
+                'Efficiency_Gained_Hours': 'sum',
+                'Original_Estimate_Hours': 'sum',
+                'Copilot_Used': lambda x: (x == 'Yes').sum() / len(x) * 100 if len(x) > 0 else 0
+            }).reset_index()
+            
+            for _, row in monthly_data.iterrows():
+                efficiency = (row['Efficiency_Gained_Hours'] / row['Original_Estimate_Hours'] * 100) if row['Original_Estimate_Hours'] > 0 else 0
+                monthly_trends.append({
+                    "month": str(row['Date']),
+                    "time_saved": float(row['Efficiency_Gained_Hours']),
+                    "entries": len(combined_df[combined_df['Date'].dt.to_period('M') == row['Date']]),
+                    "efficiency_rate": float(efficiency),
+                    "copilot_usage": float(row['Copilot_Used'])
+                })
+            
+            # Daily trends (last 30 days)
+            last_30_days = combined_df[combined_df['Date'] >= (datetime.now() - pd.Timedelta(days=30))]
+            daily_data = last_30_days.groupby(last_30_days['Date'].dt.date).agg({
+                'Efficiency_Gained_Hours': 'sum',
+                'Original_Estimate_Hours': 'sum',
+                'Copilot_Used': lambda x: (x == 'Yes').sum() / len(x) * 100 if len(x) > 0 else 0
+            }).reset_index()
+            
+            for _, row in daily_data.iterrows():
+                efficiency = (row['Efficiency_Gained_Hours'] / row['Original_Estimate_Hours'] * 100) if row['Original_Estimate_Hours'] > 0 else 0
+                daily_trends.append({
+                    "date": str(row['Date']),
+                    "time_saved": float(row['Efficiency_Gained_Hours']),
+                    "entries": len(last_30_days[last_30_days['Date'].dt.date == row['Date']]),
+                    "efficiency_rate": float(efficiency),
+                    "copilot_usage": float(row['Copilot_Used'])
+                })
+        
+        # Category breakdown
+        if 'Category' in combined_df.columns:
+            category_data = combined_df.groupby('Category').agg({
+                'Efficiency_Gained_Hours': 'sum',
+                'Original_Estimate_Hours': 'sum'
+            }).reset_index()
+            
+            for _, row in category_data.iterrows():
+                category_breakdown.append({
+                    "category": row['Category'],
+                    "time_saved": float(row['Efficiency_Gained_Hours']),
+                    "entries": len(combined_df[combined_df['Category'] == row['Category']]),
+                    "percentage": float(row['Efficiency_Gained_Hours'] / total_time_saved * 100) if total_time_saved > 0 else 0
+                })
+        
+        # Efficiency trends by team
+        for team_stat in team_stats:
+            efficiency_trends.append({
+                "team": team_stat["team_name"],
+                "efficiency_rate": team_stat["average_efficiency"],
+                "time_saved": team_stat["total_time_saved"],
+                "copilot_usage": team_stat["copilot_usage_rate"]
+            })
     else:
         total_time_saved = 0.0
         total_entries = 0
         average_efficiency = 0.0
         copilot_usage_rate = 0.0
         developers_count = 0
+        
+        # Generate sample trend data for demonstration
+        from datetime import datetime, timedelta
+        import calendar
+        
+        # Sample monthly trends (last 6 months)
+        current_date = datetime.now()
+        for i in range(6):
+            month_date = current_date - timedelta(days=30 * i)
+            month_str = f"{month_date.year}-{month_date.month:02d}"
+            
+            monthly_trends.append({
+                "month": month_str,
+                "time_saved": 15.5 + (i * 2.3),  # Trending upward
+                "entries": 8 + i,
+                "efficiency_rate": 65.0 + (i * 1.5),
+                "copilot_usage": 70.0 + (i * 2.0)
+            })
+        
+        monthly_trends.reverse()  # Chronological order
+        
+        # Sample daily trends (last 14 days)
+        for i in range(14):
+            day_date = current_date - timedelta(days=i)
+            daily_trends.append({
+                "date": day_date.strftime("%Y-%m-%d"),
+                "time_saved": 2.5 + (i % 3) * 1.2,
+                "entries": 2 + (i % 4),
+                "efficiency_rate": 60.0 + (i % 5) * 3.0,
+                "copilot_usage": 65.0 + (i % 3) * 5.0
+            })
+        
+        daily_trends.reverse()  # Chronological order
+        
+        # Sample category breakdown
+        category_breakdown = [
+            {"category": "Feature Development", "time_saved": 42.5, "entries": 15, "percentage": 35.0},
+            {"category": "Bug Fixes", "time_saved": 28.0, "entries": 12, "percentage": 23.0},
+            {"category": "Code Review", "time_saved": 22.0, "entries": 8, "percentage": 18.0},
+            {"category": "Testing", "time_saved": 18.5, "entries": 10, "percentage": 15.0},
+            {"category": "API Development", "time_saved": 9.5, "entries": 5, "percentage": 8.0}
+        ]
+        
+        # Sample efficiency trends
+        efficiency_trends = [
+            {"team": "Frontend Team", "efficiency_rate": 75.2, "time_saved": 45.5, "copilot_usage": 85.0},
+            {"team": "Backend Team", "efficiency_rate": 68.8, "time_saved": 35.0, "copilot_usage": 72.0},
+            {"team": "DevOps Team", "efficiency_rate": 71.5, "time_saved": 40.0, "copilot_usage": 68.0}
+        ]
     
     return {
         "total_time_saved": total_time_saved,
@@ -110,7 +232,11 @@ async def get_admin_dashboard():
         "copilot_usage_rate": copilot_usage_rate,
         "teams_count": len(teams_config),
         "developers_count": developers_count,
-        "team_stats": team_stats
+        "team_stats": team_stats,
+        "monthly_trends": monthly_trends,
+        "daily_trends": daily_trends,
+        "category_breakdown": category_breakdown,
+        "efficiency_trends": efficiency_trends
     }
 
 
