@@ -1,41 +1,56 @@
 """
-Admin router for dashboard and management functionality
+Admin router for dashboard and management endpoints
+Made public for testing purposes - remove auth dependencies
 """
 
-from fastapi import APIRouter, HTTPException, status, Query
-from typing import Optional, List, Dict, Any
+from fastapi import APIRouter, HTTPException, status
 import pandas as pd
+from datetime import datetime, date
+from typing import Dict, Any
 
-from models.schemas import DashboardStats, TeamStats, TeamSettings, UpdateSettingsRequest, ApiResponse, ExportRequest
-from core.data_manager import get_data_manager_instance
-from core.teams_config_manager import get_teams_config_manager_instance
-from core.team_settings_manager import get_team_settings_manager_instance
-# from core.auth import verify_admin_token  # Commented out for public testing
+from models.schemas import TeamSettings, UpdateSettingsRequest, ApiResponse
+from core.database import (
+    get_data_manager_instance, 
+    get_teams_config_manager_instance,
+    get_team_settings_manager_instance
+)
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+router = APIRouter()
 
 
 @router.get("/dashboard")
 async def get_admin_dashboard():
     """Get admin dashboard statistics - Public for testing"""
-    data_manager = get_data_manager_instance()
     teams_config_manager = get_teams_config_manager_instance()
+    data_manager = get_data_manager_instance()
     
     teams_config = teams_config_manager.load_teams_config()
-    team_breakdown = []
-    combined_df = pd.DataFrame()
     
+    if not teams_config:
+        return {
+            "total_time_saved": 0.0,
+            "total_entries": 0,
+            "average_efficiency": 0.0,
+            "copilot_usage_rate": 0.0,
+            "teams_count": 0,
+            "developers_count": 0,
+            "team_stats": []
+        }
+    
+    combined_df = pd.DataFrame()
+    team_stats = []
+    
+    # Process each team
     for team_name in teams_config.keys():
         df = data_manager.load_team_data(team_name)
         
         if not df.empty:
             combined_df = pd.concat([combined_df, df], ignore_index=True)
             
-            # Calculate team stats
+            # Calculate team-specific stats
             total_time_saved = float(df['Efficiency_Gained_Hours'].sum())
             total_entries = len(df)
             
-            # Calculate average efficiency
             valid_estimates = df[df['Original_Estimate_Hours'] > 0]
             if not valid_estimates.empty:
                 average_efficiency = float(
@@ -53,12 +68,13 @@ async def get_admin_dashboard():
             # Count unique developers
             developers_count = df['Developer_Name'].nunique()
             
-            team_breakdown.append({
+            team_stats.append({
                 "team_name": team_name,
-                "time_saved": total_time_saved,
-                "entries": total_entries,
-                "developers_count": developers_count,
-                "efficiency_rate": average_efficiency
+                "total_time_saved": total_time_saved,
+                "total_entries": total_entries,
+                "average_efficiency": average_efficiency,
+                "copilot_usage_rate": copilot_usage_rate,
+                "developers_count": developers_count
             })
     
     # Calculate overall stats
@@ -80,52 +96,21 @@ async def get_admin_dashboard():
         )
         
         developers_count = combined_df['Developer_Name'].nunique()
-        
-        # Calculate monthly trends
-        monthly_trends = []
-        if 'Week' in combined_df.columns:
-            combined_df['Month'] = pd.to_datetime(combined_df['Week']).dt.to_period('M')
-            monthly_stats = combined_df.groupby('Month').agg({
-                'Efficiency_Gained_Hours': 'sum',
-                'Original_Estimate_Hours': 'sum'
-            }).reset_index()
-            
-            for _, month_data in monthly_stats.iterrows():
-                month_efficiency = 0.0
-                if month_data['Original_Estimate_Hours'] > 0:
-                    month_efficiency = float(
-                        (month_data['Efficiency_Gained_Hours'] / 
-                         month_data['Original_Estimate_Hours']) * 100
-                    )
-                
-                month_entries = len(combined_df[combined_df['Month'] == month_data['Month']])
-                
-                monthly_trends.append({
-                    "month": str(month_data['Month']),
-                    "time_saved": float(month_data['Efficiency_Gained_Hours']),
-                    "entries": month_entries,
-                    "efficiency_rate": month_efficiency
-                })
     else:
         total_time_saved = 0.0
         total_entries = 0
         average_efficiency = 0.0
         copilot_usage_rate = 0.0
         developers_count = 0
-        monthly_trends = []
     
     return {
-        "success": True,
-        "data": {
-            "total_time_saved": total_time_saved,
-            "total_entries": total_entries,
-            "average_efficiency": average_efficiency,
-            "copilot_usage_rate": copilot_usage_rate,
-            "teams_count": len(teams_config),
-            "developers_count": developers_count,
-            "team_breakdown": team_breakdown,
-            "monthly_trends": monthly_trends
-        }
+        "total_time_saved": total_time_saved,
+        "total_entries": total_entries,
+        "average_efficiency": average_efficiency,
+        "copilot_usage_rate": copilot_usage_rate,
+        "teams_count": len(teams_config),
+        "developers_count": developers_count,
+        "team_stats": team_stats
     }
 
 
