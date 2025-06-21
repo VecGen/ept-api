@@ -21,6 +21,7 @@ class TokenResponse(BaseModel):
 class EngineerLoginRequest(BaseModel):
     developer_name: str
     team_name: str
+    password: str
 
 
 # Team schemas
