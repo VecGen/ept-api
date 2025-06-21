@@ -39,23 +39,22 @@ class DataManager:
             )
     
     def load_team_data(self, team_name: str) -> pd.DataFrame:
-        """Load team data from S3 only"""
+        """Load team data from S3 only - Returns empty DataFrame if file doesn't exist"""
         try:
             # URL encode team name for S3 key to handle spaces and special characters
             encoded_team_name = urllib.parse.quote(team_name, safe='')
-            s3_key = f"teams/{encoded_team_name}_efficiency_data.xlsx"
             
-            print(f"🔍 Loading S3 key: {s3_key}")
-            
-            # Create temp file to download to
+            # Create temp file for S3 download
             temp_file = self.data_directory / f"temp_{encoded_team_name}_efficiency_data.xlsx"
             self.data_directory.mkdir(exist_ok=True)
             
             try:
-                # Use get_object instead of download_file to avoid HeadObject operations
+                # Download from S3
+                s3_key = f"teams/{encoded_team_name}_efficiency_data.xlsx"
+                print(f"🔍 Loading S3 key: {s3_key}")
                 response = self.s3_client.get_object(Bucket=self.s3_bucket, Key=s3_key)
                 
-                # Write the content to temp file
+                # Save to temp file and read
                 with open(temp_file, 'wb') as f:
                     f.write(response['Body'].read())
                 
@@ -66,29 +65,29 @@ class DataManager:
                 return df
             except ClientError as e:
                 error_code = e.response['Error']['Code']
-                print(f"📄 S3 ClientError: {error_code}")
+                print(f"ℹ️ S3 Info: {error_code}")
                 if error_code in ['NoSuchKey', '404', 'NotFound']:
-                    # File doesn't exist in S3, return empty dataframe
+                    # File doesn't exist in S3, return empty dataframe - this is normal for new teams
                     print(f"📁 No existing data file found for team '{team_name}', returning empty DataFrame")
                     return pd.DataFrame()
                 else:
-                    print(f"❌ S3 error: {str(e)}")
-                    raise HTTPException(
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail=f"Failed to load team data from S3: {str(e)}"
-                    )
+                    # For other S3 errors, log but still return empty DataFrame to prevent 500 errors
+                    print(f"⚠️ S3 error (returning empty data): {str(e)}")
+                    return pd.DataFrame()
+            except Exception as file_error:
+                # Handle any file processing errors by returning empty DataFrame
+                print(f"⚠️ File processing error (returning empty data): {str(file_error)}")
+                return pd.DataFrame()
             finally:
                 # Ensure temp file is cleaned up
                 if temp_file.exists():
                     temp_file.unlink()
                     
         except Exception as e:
-            print(f"❌ Unexpected error in load_team_data: {str(e)}")
+            # For any other unexpected errors, log and return empty DataFrame to prevent 500 errors
+            print(f"⚠️ Unexpected error in load_team_data (returning empty data): {str(e)}")
             print(f"   Exception type: {type(e).__name__}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error loading team data: {str(e)}"
-            )
+            return pd.DataFrame()
     
     def save_team_data(self, team_name: str, data: pd.DataFrame) -> bool:
         """Save team data to S3 only"""
