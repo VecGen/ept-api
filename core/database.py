@@ -41,47 +41,69 @@ class DataManager:
     def load_team_data(self, team_name: str) -> pd.DataFrame:
         """Load team data from S3 only - Returns empty DataFrame if file doesn't exist"""
         try:
-            # URL encode team name for S3 key to handle spaces and special characters
-            encoded_team_name = urllib.parse.quote(team_name, safe='')
+            # Try multiple S3 key variations to handle different naming conventions
+            key_variations = [
+                # Original URL-encoded approach (this one is working from logs)
+                f"teams/{urllib.parse.quote(team_name, safe='')}_efficiency_data.xlsx",
+                # Replace spaces with underscores
+                f"teams/{team_name.replace(' ', '_')}_efficiency_data.xlsx",
+                # Replace spaces with hyphens
+                f"teams/{team_name.replace(' ', '-')}_efficiency_data.xlsx",
+                # No spaces (concatenated)
+                f"teams/{team_name.replace(' ', '')}_efficiency_data.xlsx",
+                # Original team name as-is
+                f"teams/{team_name}_efficiency_data.xlsx"
+            ]
             
             # Create temp file for S3 download
+            encoded_team_name = urllib.parse.quote(team_name, safe='')
             temp_file = self.data_directory / f"temp_{encoded_team_name}_efficiency_data.xlsx"
             self.data_directory.mkdir(exist_ok=True)
             
-            try:
-                # Download from S3
-                s3_key = f"teams/{encoded_team_name}_efficiency_data.xlsx"
-                print(f"🔍 Loading S3 key: {s3_key}")
-                response = self.s3_client.get_object(Bucket=self.s3_bucket, Key=s3_key)
-                
-                # Save to temp file and read
-                with open(temp_file, 'wb') as f:
-                    f.write(response['Body'].read())
-                
-                df = pd.read_excel(temp_file)
-                # Clean up temp file
-                temp_file.unlink()
-                print(f"✅ Successfully loaded {len(df)} rows from S3")
-                return df
-            except ClientError as e:
-                error_code = e.response['Error']['Code']
-                print(f"ℹ️ S3 Info: {error_code}")
-                if error_code in ['NoSuchKey', '404', 'NotFound']:
-                    # File doesn't exist in S3, return empty dataframe - this is normal for new teams
-                    print(f"📁 No existing data file found for team '{team_name}', returning empty DataFrame")
-                    return pd.DataFrame()
-                else:
-                    # For other S3 errors, log but still return empty DataFrame to prevent 500 errors
-                    print(f"⚠️ S3 error (returning empty data): {str(e)}")
-                    return pd.DataFrame()
-            except Exception as file_error:
-                # Handle any file processing errors by returning empty DataFrame
-                print(f"⚠️ File processing error (returning empty data): {str(file_error)}")
-                return pd.DataFrame()
-            finally:
-                # Ensure temp file is cleaned up
-                if temp_file.exists():
-                    temp_file.unlink()
+            last_error = None
+            
+            for s3_key in key_variations:
+                try:
+                    print(f"🔍 Loading S3 key: {s3_key}")
+                    response = self.s3_client.get_object(Bucket=self.s3_bucket, Key=s3_key)
+                    
+                    # Save to temp file and read
+                    with open(temp_file, 'wb') as f:
+                        f.write(response['Body'].read())
+                    
+                    df = pd.read_excel(temp_file)
+                    
+                    # Clean up temp file
+                    if temp_file.exists():
+                        temp_file.unlink()
+                        
+                    print(f"✅ Successfully loaded {len(df)} rows from S3")
+                    return df
+                    
+                except ClientError as e:
+                    error_code = e.response['Error']['Code']
+                    if error_code in ['NoSuchKey', '404', 'NotFound']:
+                        # Key not found, try next variation
+                        last_error = e
+                        continue
+                    else:
+                        # For other S3 errors, log but continue trying other keys
+                        print(f"⚠️ S3 error with key {s3_key}: {str(e)}")
+                        last_error = e
+                        continue
+                except Exception as file_error:
+                    # Handle any file processing errors
+                    print(f"⚠️ File processing error with key {s3_key}: {str(file_error)}")
+                    last_error = file_error
+                    continue
+                finally:
+                    # Ensure temp file is cleaned up after each attempt
+                    if temp_file.exists():
+                        temp_file.unlink()
+            
+            # If we get here, none of the key variations worked
+            print(f"📁 No existing data file found for team '{team_name}' using any naming convention")
+            return pd.DataFrame()
                     
         except Exception as e:
             # For any other unexpected errors, log and return empty DataFrame to prevent 500 errors
