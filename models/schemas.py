@@ -16,11 +16,17 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user_type: str
+    user_data: Optional[Dict[str, Any]] = None
 
 
 class EngineerLoginRequest(BaseModel):
     developer_name: str
     team_name: str
+    password: str
+
+
+class EmailLoginRequest(BaseModel):
+    email: str
     password: str
 
 

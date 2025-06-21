@@ -5,7 +5,7 @@ Authentication router for admin and engineer login
 from fastapi import APIRouter, HTTPException, status, Depends
 from datetime import timedelta
 
-from models.schemas import LoginRequest, TokenResponse, EngineerLoginRequest, ApiResponse
+from models.schemas import LoginRequest, TokenResponse, EngineerLoginRequest, EmailLoginRequest, ApiResponse
 from core.auth import verify_admin_password, create_access_token, get_settings
 from core.database import get_teams_config_manager_instance
 
@@ -98,6 +98,68 @@ async def engineer_login(login_data: EngineerLoginRequest):
     return TokenResponse(
         access_token=access_token,
         user_type="engineer"
+    )
+
+
+@router.post("/engineer/login-email", response_model=TokenResponse)
+async def engineer_email_login(login_data: EmailLoginRequest):
+    """Engineer login endpoint using email and password"""
+    teams_config_manager = get_teams_config_manager_instance()
+    teams_config = teams_config_manager.load_teams_config()
+    
+    # Search for the developer by email across all teams
+    found_developer = None
+    found_team = None
+    
+    for team_name, team_config in teams_config.items():
+        # Handle both old and new data structures
+        if isinstance(team_config, dict) and 'developers' in team_config:
+            developers = team_config['developers']
+        elif isinstance(team_config, list):
+            developers = [{'name': dev} if isinstance(dev, str) else dev for dev in team_config]
+        else:
+            developers = []
+        
+        for dev in developers:
+            if isinstance(dev, dict):
+                dev_email = dev.get('email', '')
+                dev_password = dev.get('password', '')
+                dev_name = dev.get('name', '')
+                
+                if dev_email == login_data.email:
+                    # Found the developer, now validate password
+                    if not dev_password or dev_password == login_data.password:
+                        found_developer = dev
+                        found_team = team_name
+                        break
+    
+    if not found_developer:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password"
+        )
+    
+    # Create access token with user data
+    access_token = create_access_token(
+        data={
+            "user_type": "engineer",
+            "sub": found_developer.get('name', ''),
+            "team": found_team,
+            "email": login_data.email
+        }
+    )
+    
+    # Return response with user data
+    return TokenResponse(
+        access_token=access_token,
+        user_type="engineer",
+        user_data={
+            "developer_name": found_developer.get('name', ''),
+            "team_name": found_team,
+            "email": found_developer.get('email', ''),
+            "employee_id": found_developer.get('employee_id', ''),
+            "name": found_developer.get('name', '')  # Alias for developer_name
+        }
     )
 
 
